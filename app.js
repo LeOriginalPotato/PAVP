@@ -1,10 +1,9 @@
-require('dotenv').config();
-
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const { getConfigValue } = require('./config');
 const { query, pool } = require('./db');
 const { router: authRouter } = require('./routes/auth');
 const adminRouter = require('./routes/admin');
@@ -12,8 +11,8 @@ const votersRouter = require('./routes/voters');
 const { importCsv } = require('./services/importCsv');
 
 const app = express();
-const port = Number(process.env.PORT || 3000);
-const allowedHosts = String(process.env.ALLOWED_HOSTS || 'lge2026.pa-atwork.org')
+const port = Number(getConfigValue('PORT', '3000'));
+const allowedHosts = String(getConfigValue('ALLOWED_HOSTS', 'lge2026.pa-atwork.org'))
   .split(',')
   .map((host) => host.trim().toLowerCase())
   .filter(Boolean);
@@ -38,13 +37,13 @@ app.use((req, res, next) => {
   res.status(403).send('Forbidden host.');
 });
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'change-me-in-env',
+  secret: getConfigValue('SESSION_SECRET', 'change-me-in-env'),
   resave: false,
   saveUninitialized: false,
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
-    secure: String(process.env.NODE_ENV || '').toLowerCase() === 'production'
+    secure: String(getConfigValue('NODE_ENV', '')).toLowerCase() === 'production'
   }
 }));
 
@@ -63,9 +62,9 @@ async function applySchema() {
 }
 
 async function ensureInitialAdmin() {
-  const username = String(process.env.ADMIN_USERNAME || '').trim();
-  const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  const password = String(process.env.ADMIN_PASSWORD || '').trim();
+  const username = String(getConfigValue('ADMIN_USERNAME', '')).trim();
+  const email = String(getConfigValue('ADMIN_EMAIL', '')).trim().toLowerCase();
+  const password = String(getConfigValue('ADMIN_PASSWORD', '')).trim();
 
   if (!username || !email || !password) {
     return;
@@ -82,11 +81,11 @@ async function ensureInitialAdmin() {
     [username, email, hash, 'admin']
   );
 
-  console.log('Initial admin user created from environment variables.');
+  console.log('Initial admin user created from local config.');
 }
 
 async function runImportCli() {
-  const fileArg = process.argv[3] || process.env.CSV_FILE_PATH;
+  const fileArg = process.argv[3] || getConfigValue('CSV_FILE_PATH', '');
   if (!fileArg) {
     console.error('Provide CSV file path: node app.js import-csv <path-to-file.csv>');
     process.exit(1);

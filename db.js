@@ -1,11 +1,12 @@
 const { Pool } = require('pg');
+const { getConfigValue } = require('./config');
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = getConfigValue('DATABASE_URL');
 if (!connectionString) {
   throw new Error('DATABASE_URL is required.');
 }
 
-const sslEnabled = String(process.env.PG_SSL || '').toLowerCase() === 'true';
+const sslEnabled = String(getConfigValue('PG_SSL', '')).toLowerCase() === 'true';
 
 const pool = new Pool({
   connectionString,
