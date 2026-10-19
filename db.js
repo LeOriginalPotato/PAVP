@@ -1,4 +1,5 @@
 const fs = require('fs');
+const path = require('path');
 const mysql = require('mysql2/promise');
 const { getConfigValue } = require('./config');
 
@@ -11,12 +12,86 @@ const LOCAL_MARIADB_SOCKETS = [
 
 const MYSQL_URL_HINT = 'mysql://USER:PASSWORD@localhost:3306/DBNAME';
 
+const SOCKET_HINT = 'Set DATABASE_SOCKET to the host socket path (often /var/lib/mysql/mysql.sock), or contact hosting if that socket is not visible to the Node app.';
+
 const connectionString = getConfigValue('DATABASE_URL');
 if (!connectionString) {
   throw new Error('DATABASE_URL is required.');
 }
 
-function connectionOptionsFromDatabaseUrl(rawUrl) {
+let tcpFallback = null;
+
+function readExplicitSocket() {
+  const databaseSocket = String(getConfigValue('DATABASE_SOCKET', '')).trim();
+  if (databaseSocket) {
+    return { name: 'DATABASE_SOCKET', path: databaseSocket };
+  }
+
+  const mysqlSocket = String(getConfigValue('MYSQL_SOCKET', '')).trim();
+  if (mysqlSocket) {
+    return { name: 'MYSQL_SOCKET', path: mysqlSocket };
+  }
+
+  return null;
+}
+
+function assertExplicitSocket(explicitSocket) {
+  const socketPath = explicitSocket.path;
+  if (!path.isAbsolute(socketPath)) {
+    throw new Error(`${explicitSocket.name} must be an absolute path to the MariaDB socket. TCP was not used.`);
+  }
+
+  let stat;
+  try {
+    stat = fs.statSync(socketPath);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      throw new Error(`${explicitSocket.name}=${socketPath} is not visible to this app, so TCP was not used. ${SOCKET_HINT}`);
+    }
+    const reason = error && (error.code || error.message) ? (error.code || error.message) : 'unknown error';
+    throw new Error(`${explicitSocket.name}=${socketPath} could not be opened (${reason}). TCP was not used. ${SOCKET_HINT}`);
+  }
+
+  if (!stat.isSocket()) {
+    throw new Error(`${explicitSocket.name}=${socketPath} exists but is not a Unix socket. TCP was not used.`);
+  }
+}
+
+function explainConnectionFailure(error) {
+  if (!tcpFallback) {
+    return error;
+  }
+
+  const nested = Array.isArray(error && error.errors) ? error.errors : [];
+  const candidates = [error, ...nested].filter(Boolean);
+  const connectError = candidates.find((item) => {
+    const code = item.code;
+    const message = String(item.message || '');
+    return item.syscall === 'connect'
+      || code === 'ECONNREFUSED'
+      || code === 'ETIMEDOUT'
+      || code === 'EHOSTUNREACH'
+      || code === 'ENETUNREACH'
+      || message.includes('ECONNREFUSED');
+  });
+
+  if (!connectError) {
+    return error;
+  }
+
+  const originalMessage = String(connectError.message || error.message || error);
+  const wrapped = new Error(
+    `${originalMessage}. No MariaDB Unix socket was found in this app, and TCP ${tcpFallback.host}:${tcpFallback.port} failed. ${SOCKET_HINT}`
+  );
+  wrapped.code = connectError.code || error.code;
+  if (connectError.errno || error.errno) {
+    wrapped.errno = connectError.errno || error.errno;
+  }
+  wrapped.cause = error;
+  return wrapped;
+}
+
+function connectionOptionsFromDatabaseUrl(rawUrl, explicitSocket) {
   let parsed;
   try {
     parsed = new URL(String(rawUrl).trim());
@@ -66,14 +141,21 @@ function connectionOptionsFromDatabaseUrl(rawUrl) {
     bigNumberStrings: false
   };
 
-  // cPanel grants MariaDB users at "localhost", which is the Unix socket.
-  // A TCP connection to 127.0.0.1 would not match that account.
+  // An explicit socket skips TCP. cPanel grants the database user at localhost,
+  // which is the Unix socket, and the Node container often cannot see the usual paths.
+  if (explicitSocket) {
+    assertExplicitSocket(explicitSocket);
+    options.socketPath = explicitSocket.path;
+    return options;
+  }
+
   if (parsed.hostname === 'localhost') {
     const socketPath = LOCAL_MARIADB_SOCKETS.find((candidate) => fs.existsSync(candidate));
     if (socketPath) {
       options.socketPath = socketPath;
       return options;
     }
+    tcpFallback = { host: '127.0.0.1', port };
     options.host = '127.0.0.1';
     options.port = port;
     return options;
@@ -84,7 +166,7 @@ function connectionOptionsFromDatabaseUrl(rawUrl) {
   return options;
 }
 
-const pool = mysql.createPool(connectionOptionsFromDatabaseUrl(connectionString));
+const pool = mysql.createPool(connectionOptionsFromDatabaseUrl(connectionString, readExplicitSocket()));
 
 function normalizeResult(result) {
   if (Array.isArray(result)) {
@@ -103,12 +185,22 @@ function normalizeResult(result) {
 }
 
 async function query(text, params = []) {
-  const [result] = await pool.query(text, params);
-  return normalizeResult(result);
+  try {
+    const [result] = await pool.query(text, params);
+    return normalizeResult(result);
+  } catch (error) {
+    throw explainConnectionFailure(error);
+  }
 }
 
 async function withTransaction(handler) {
-  const connection = await pool.getConnection();
+  let connection;
+  try {
+    connection = await pool.getConnection();
+  } catch (error) {
+    throw explainConnectionFailure(error);
+  }
+
   try {
     await connection.beginTransaction();
     const client = {
