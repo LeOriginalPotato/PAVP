@@ -52,7 +52,7 @@ Import progress is tracked in `import_jobs` table.
 ## 6) cPanel deployment
 The host database is MariaDB on `localhost:3306`. `DATABASE_URL` is enough; `config.local.json` is optional and is used only for keys that are not set in the environment.
 
-1. Set `DATABASE_URL` to `mysql://USER:PASSWORD@localhost:3306/DBNAME`.
+1. Set `DATABASE_URL` to `mysql://USER:PASSWORD@localhost:3306/DBNAME`. Host `localhost` uses the local MariaDB socket when that socket exists, so a cPanel user granted at `localhost` can connect. Host `127.0.0.1` uses TCP instead.
 2. Deploy this revision (it must include `config.js`, `db.js`, `sql/schema.sql`, and `package.json`) and run `npm install` in the application root.
 3. Restart the Node.js app (`npm start` runs `node app.js`).
 4. Startup applies `sql/schema.sql`. Confirm `app_users`, `voters_roll`, and `import_jobs` exist, then open `/health`.

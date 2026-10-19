@@ -1,5 +1,13 @@
+const fs = require('fs');
 const mysql = require('mysql2/promise');
 const { getConfigValue } = require('./config');
+
+const LOCAL_MARIADB_SOCKETS = [
+  '/var/lib/mysql/mysql.sock',
+  '/var/run/mysqld/mysqld.sock',
+  '/run/mysqld/mysqld.sock',
+  '/tmp/mysql.sock'
+];
 
 const MYSQL_URL_HINT = 'mysql://USER:PASSWORD@localhost:3306/DBNAME';
 
@@ -47,9 +55,7 @@ function connectionOptionsFromDatabaseUrl(rawUrl) {
     throw new Error(`DATABASE_URL must include a username: ${MYSQL_URL_HINT}`);
   }
 
-  return {
-    host: parsed.hostname,
-    port,
+  const options = {
     user,
     password,
     database,
@@ -59,6 +65,23 @@ function connectionOptionsFromDatabaseUrl(rawUrl) {
     supportBigNumbers: true,
     bigNumberStrings: false
   };
+
+  // cPanel grants MariaDB users at "localhost", which is the Unix socket.
+  // A TCP connection to 127.0.0.1 would not match that account.
+  if (parsed.hostname === 'localhost') {
+    const socketPath = LOCAL_MARIADB_SOCKETS.find((candidate) => fs.existsSync(candidate));
+    if (socketPath) {
+      options.socketPath = socketPath;
+      return options;
+    }
+    options.host = '127.0.0.1';
+    options.port = port;
+    return options;
+  }
+
+  options.host = parsed.hostname;
+  options.port = port;
+  return options;
 }
 
 const pool = mysql.createPool(connectionOptionsFromDatabaseUrl(connectionString));
