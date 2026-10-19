@@ -6,3 +6,6 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Local runtime config. Copy config.local.example.json and fill in secrets.
+config.local.json

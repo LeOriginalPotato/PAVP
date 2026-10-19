@@ -7,5 +7,6 @@
   "ADMIN_EMAIL": "admin@lge2026.pa-atwork.org",
   "ADMIN_PASSWORD": "ChangeMeNow!123",
   "ALLOWED_HOSTS": "lge2026.pa-atwork.org",
-  "PG_SSL": "false"
+  "PG_SSL": "false",
+  "CSV_FILE_PATH": ""
 }
