@@ -1,0 +1,8 @@
+node_modules/
+
+# Secret environment files. cPanel Setup Node.js App will not accept
+# environment variables unless these are ignored. The placeholder template
+# stays tracked.
+.env
+.env.*
+!.env.example
