@@ -13,9 +13,30 @@ const { importCsv } = require('./services/importCsv');
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const allowedHosts = String(process.env.ALLOWED_HOSTS || 'lge2026.pa-atwork.org')
+  .split(',')
+  .map((host) => host.trim().toLowerCase())
+  .filter(Boolean);
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  const hostHeader = String(req.headers.host || '').toLowerCase();
+  const hostname = hostHeader.split(':')[0];
+  const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+  if (String(process.env.NODE_ENV || '').toLowerCase() !== 'production' && isLocalHost) {
+    next();
+    return;
+  }
+
+  if (allowedHosts.includes(hostname)) {
+    next();
+    return;
+  }
+
+  res.status(403).send('Forbidden host.');
+});
 app.use(session({
   secret: process.env.SESSION_SECRET || 'change-me-in-env',
   resave: false,

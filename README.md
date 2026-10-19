@@ -18,6 +18,7 @@ Secure Node.js + PostgreSQL portal for South Africa LGE 2026 voters-roll access 
    - `DATABASE_URL`
    - `SESSION_SECRET`
    - `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
+   - `ALLOWED_HOSTS` (example: `lge2026.pa-atwork.org`)
 3. Install dependencies:
    - `npm install`
 
