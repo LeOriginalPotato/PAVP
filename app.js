@@ -58,7 +58,14 @@ app.get('/health', (req, res) => {
 async function applySchema() {
   const schemaPath = path.join(__dirname, 'sql', 'schema.sql');
   const sql = fs.readFileSync(schemaPath, 'utf8');
-  await query(sql);
+  const statements = sql
+    .split(';')
+    .map((statement) => statement.trim())
+    .filter(Boolean);
+
+  for (const statement of statements) {
+    await query(statement);
+  }
 }
 
 async function ensureInitialAdmin() {
@@ -70,14 +77,14 @@ async function ensureInitialAdmin() {
     return;
   }
 
-  const existing = await query('SELECT id FROM app_users WHERE username = $1 OR email = $2 LIMIT 1', [username, email]);
+  const existing = await query('SELECT id FROM app_users WHERE username = ? OR email = ? LIMIT 1', [username, email]);
   if (existing.rows.length > 0) {
     return;
   }
 
   const hash = await bcrypt.hash(password, 12);
   await query(
-    'INSERT INTO app_users (username, email, password_hash, role) VALUES ($1, $2, $3, $4)',
+    'INSERT INTO app_users (username, email, password_hash, role) VALUES (?, ?, ?, ?)',
     [username, email, hash, 'admin']
   );
 

@@ -2,11 +2,10 @@
   "PORT": "3000",
   "NODE_ENV": "production",
   "SESSION_SECRET": "change-this-long-random-secret",
-  "DATABASE_URL": "postgres://username:password@localhost:5432/lge2026",
+  "DATABASE_URL": "mysql://USER:PASSWORD@localhost:3306/DBNAME",
   "ADMIN_USERNAME": "admin",
   "ADMIN_EMAIL": "admin@lge2026.pa-atwork.org",
   "ADMIN_PASSWORD": "ChangeMeNow!123",
   "ALLOWED_HOSTS": "lge2026.pa-atwork.org",
-  "PG_SSL": "false",
   "CSV_FILE_PATH": ""
 }

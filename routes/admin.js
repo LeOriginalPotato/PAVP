@@ -49,7 +49,7 @@ router.post('/admin/users', ensureAuth, ensureAdmin, async (req, res) => {
   const hash = await bcrypt.hash(password, 12);
 
   await query(
-    'INSERT INTO app_users (username, email, password_hash, role) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
+    'INSERT INTO app_users (username, email, password_hash, role) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE username = username',
     [username, email, hash, role]
   );
 

@@ -48,17 +48,18 @@ router.get('/search', ensureAuth, async (req, res) => {
 
   let results = [];
   if (q) {
-    const whereClauses = searchableColumns.map((col) => `${col} ILIKE $1`);
+    const pattern = `%${q}%`;
+    const whereClauses = searchableColumns.map((col) => `LOWER(${col}) LIKE LOWER(?)`);
     const sql = `
       SELECT province, municipality, ward_id, vd_number, vr_section, seq_no, id_number, surname, full_name, voter_status,
              street_number, street_name, street_type, place_number, place_name, house_number, farm_name, farm_number,
              location, suburb, town, res_postal_code
       FROM voters_roll
       WHERE (${whereClauses.join(' OR ')})
-      ORDER BY CASE WHEN id_number = $2 THEN 0 ELSE 1 END, surname, full_name
-      LIMIT ${limit};
+      ORDER BY CASE WHEN id_number = ? THEN 0 ELSE 1 END, surname, full_name
+      LIMIT ?;
     `;
-    const dbResult = await query(sql, [`%${q}%`, q]);
+    const dbResult = await query(sql, [...searchableColumns.map(() => pattern), q, limit]);
     results = dbResult.rows;
   }
 
@@ -101,11 +102,11 @@ router.get('/stats', ensureAuth, async (req, res) => {
   const safeGroupBy = allowedGroupings.includes(groupBy) ? groupBy : 'ward_id';
   const safeFilterColumn = allowedFilters.includes(filterColumn) ? filterColumn : '';
 
-  const whereClause = safeFilterColumn && filterValue ? `WHERE ${safeFilterColumn} = $1` : '';
+  const whereClause = safeFilterColumn && filterValue ? `WHERE ${safeFilterColumn} = ?` : '';
   const params = safeFilterColumn && filterValue ? [filterValue] : [];
 
   const sql = `
-    SELECT COALESCE(NULLIF(${safeGroupBy}, ''), '(blank)') AS bucket, COUNT(*)::bigint AS total
+    SELECT COALESCE(NULLIF(${safeGroupBy}, ''), '(blank)') AS bucket, COUNT(*) AS total
     FROM voters_roll
     ${whereClause}
     GROUP BY bucket
