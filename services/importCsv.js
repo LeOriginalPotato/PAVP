@@ -50,9 +50,8 @@ async function flushBatch(batch, sourceFile) {
   const values = [];
   const placeholders = [];
 
-  batch.forEach((record, idx) => {
-    const base = idx * cols.length;
-    placeholders.push(`(${cols.map((_, i) => `$${base + i + 1}`).join(',')})`);
+  batch.forEach((record) => {
+    placeholders.push(`(${cols.map(() => '?').join(',')})`);
     values.push(
       record.province,
       record.municipality,
@@ -83,28 +82,27 @@ async function flushBatch(batch, sourceFile) {
   const sql = `
     INSERT INTO voters_roll (${cols.join(',')})
     VALUES ${placeholders.join(',')}
-    ON CONFLICT (id_number, ward_id, vd_number, seq_no)
-    DO UPDATE SET
-      province = EXCLUDED.province,
-      municipality = EXCLUDED.municipality,
-      vr_section = EXCLUDED.vr_section,
-      surname = EXCLUDED.surname,
-      full_name = EXCLUDED.full_name,
-      voter_status = EXCLUDED.voter_status,
-      street_number = EXCLUDED.street_number,
-      street_name = EXCLUDED.street_name,
-      street_type = EXCLUDED.street_type,
-      place_number = EXCLUDED.place_number,
-      place_name = EXCLUDED.place_name,
-      house_number = EXCLUDED.house_number,
-      farm_name = EXCLUDED.farm_name,
-      farm_number = EXCLUDED.farm_number,
-      location = EXCLUDED.location,
-      suburb = EXCLUDED.suburb,
-      town = EXCLUDED.town,
-      res_postal_code = EXCLUDED.res_postal_code,
-      source_file = EXCLUDED.source_file,
-      imported_at = NOW();
+    ON DUPLICATE KEY UPDATE
+      province = VALUES(province),
+      municipality = VALUES(municipality),
+      vr_section = VALUES(vr_section),
+      surname = VALUES(surname),
+      full_name = VALUES(full_name),
+      voter_status = VALUES(voter_status),
+      street_number = VALUES(street_number),
+      street_name = VALUES(street_name),
+      street_type = VALUES(street_type),
+      place_number = VALUES(place_number),
+      place_name = VALUES(place_name),
+      house_number = VALUES(house_number),
+      farm_name = VALUES(farm_name),
+      farm_number = VALUES(farm_number),
+      location = VALUES(location),
+      suburb = VALUES(suburb),
+      town = VALUES(town),
+      res_postal_code = VALUES(res_postal_code),
+      source_file = VALUES(source_file),
+      imported_at = CURRENT_TIMESTAMP
   `;
 
   await query(sql, values);
@@ -113,8 +111,8 @@ async function flushBatch(batch, sourceFile) {
 
 async function updateProgress(jobId, status, rowsProcessed, rowsInserted, rowsRejected, errorMessage = null) {
   await query(
-    'UPDATE import_jobs SET status = $2, rows_processed = $3, rows_inserted = $4, rows_rejected = $5, error_message = $6 WHERE id = $1',
-    [jobId, status, rowsProcessed, rowsInserted, rowsRejected, errorMessage]
+    'UPDATE import_jobs SET status = ?, rows_processed = ?, rows_inserted = ?, rows_rejected = ?, error_message = ? WHERE id = ?',
+    [status, rowsProcessed, rowsInserted, rowsRejected, errorMessage, jobId]
   );
 }
 
@@ -125,10 +123,10 @@ async function importCsv(filePath) {
   }
 
   const startJob = await query(
-    'INSERT INTO import_jobs (file_path, status) VALUES ($1, $2) RETURNING id',
+    'INSERT INTO import_jobs (file_path, status) VALUES (?, ?)',
     [resolvedPath, 'running']
   );
-  const jobId = startJob.rows[0].id;
+  const jobId = startJob.insertId;
 
   let rowsProcessed = 0;
   let rowsInserted = 0;
@@ -188,15 +186,15 @@ async function importCsv(filePath) {
     });
 
     await query(
-      'UPDATE import_jobs SET status = $2, rows_processed = $3, rows_inserted = $4, rows_rejected = $5, finished_at = NOW(), error_message = NULL WHERE id = $1',
-      [jobId, 'completed', rowsProcessed, rowsInserted, rowsRejected]
+      'UPDATE import_jobs SET status = ?, rows_processed = ?, rows_inserted = ?, rows_rejected = ?, finished_at = CURRENT_TIMESTAMP, error_message = NULL WHERE id = ?',
+      ['completed', rowsProcessed, rowsInserted, rowsRejected, jobId]
     );
 
     return { jobId, rowsProcessed, rowsInserted, rowsRejected };
   } catch (error) {
     await query(
-      'UPDATE import_jobs SET status = $2, rows_processed = $3, rows_inserted = $4, rows_rejected = $5, finished_at = NOW(), error_message = $6 WHERE id = $1',
-      [jobId, 'failed', rowsProcessed, rowsInserted, rowsRejected, String(error.message || error)]
+      'UPDATE import_jobs SET status = ?, rows_processed = ?, rows_inserted = ?, rows_rejected = ?, finished_at = CURRENT_TIMESTAMP, error_message = ? WHERE id = ?',
+      ['failed', rowsProcessed, rowsInserted, rowsRejected, String(error.message || error), jobId]
     );
     throw error;
   }

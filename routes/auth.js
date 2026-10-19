@@ -48,8 +48,8 @@ router.post('/login', async (req, res) => {
   }
 
   const result = await query(
-    'SELECT id, username, email, password_hash, role, is_active FROM app_users WHERE username = $1 OR email = $1 LIMIT 1',
-    [identifier]
+    'SELECT id, username, email, password_hash, role, is_active FROM app_users WHERE username = ? OR email = ? LIMIT 1',
+    [identifier, identifier]
   );
 
   const user = result.rows[0];
