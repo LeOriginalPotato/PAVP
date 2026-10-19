@@ -24,7 +24,7 @@ app.use((req, res, next) => {
   const hostname = hostHeader.split(':')[0];
   const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
 
-  if (String(process.env.NODE_ENV || '').toLowerCase() !== 'production' && isLocalHost) {
+  if (String(getConfigValue('NODE_ENV', '')).toLowerCase() !== 'production' && isLocalHost) {
     next();
     return;
   }
