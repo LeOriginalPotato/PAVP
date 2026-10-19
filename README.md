@@ -16,6 +16,7 @@ Secure Node.js + MariaDB portal for South Africa LGE 2026 voters-roll access on 
 1. Copy `config.local.example.json` to `config.local.json`.
 2. Fill settings in `config.local.json`:
    - `DATABASE_URL` (`mysql://USER:PASSWORD@localhost:3306/DBNAME`; percent-encode reserved characters in the password)
+   - `DATABASE_SOCKET` when the app cannot see the host MariaDB socket (example: `/var/lib/mysql/mysql.sock`)
    - `SESSION_SECRET`
    - `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
    - `ALLOWED_HOSTS` (example: `lge2026.pa-atwork.org`)
@@ -50,9 +51,9 @@ Import progress is tracked in `import_jobs` table.
   - displays voter counts per selected category
 
 ## 6) cPanel deployment
-The host database is MariaDB on `localhost:3306`. `DATABASE_URL` is enough; `config.local.json` is optional and is used only for keys that are not set in the environment.
+The host database is MariaDB. Prefer `mysql://USER:PASSWORD@localhost:3306/DBNAME` plus `DATABASE_SOCKET=/path/to/mysql.sock` when the Node app runs isolated from the default socket paths. `config.local.json` is optional and is used only for keys that are not set in the environment. `MYSQL_SOCKET` is accepted as an alias of `DATABASE_SOCKET`.
 
-1. Set `DATABASE_URL` to `mysql://USER:PASSWORD@localhost:3306/DBNAME`. Host `localhost` uses the local MariaDB socket when that socket exists, so a cPanel user granted at `localhost` can connect. Host `127.0.0.1` uses TCP instead.
+1. Set `DATABASE_URL` to `mysql://USER:PASSWORD@localhost:3306/DBNAME`. If startup reports that TCP `127.0.0.1:3306` was refused, set `DATABASE_SOCKET` to the host socket path (often `/var/lib/mysql/mysql.sock`) or contact hosting to expose that socket to the app. A set `DATABASE_SOCKET` is used instead of TCP.
 2. Deploy this revision (it must include `config.js`, `db.js`, `sql/schema.sql`, and `package.json`) and run `npm install` in the application root.
 3. Restart the Node.js app (`npm start` runs `node app.js`).
 4. Startup applies `sql/schema.sql`. Confirm `app_users`, `voters_roll`, and `import_jobs` exist, then open `/health`.
